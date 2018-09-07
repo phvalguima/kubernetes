@@ -18,6 +18,7 @@ import re
 import subprocess
 import hashlib
 import json
+import random
 
 from subprocess import check_output, check_call
 from socket import gethostname, getfqdn
@@ -30,6 +31,7 @@ from time import sleep
 
 db = unitdata.kv()
 kubeclientconfig_path = '/root/.kube/config'
+kubeproxyconfig_path = '/root/cdk/kubeproxyconfig'
 
 
 def get_version(bin_name):
@@ -348,3 +350,19 @@ def configure_kubernetes_service(key, service, base_args, extra_args_key):
     check_call(cmd)
 
     db.set(prev_args_key, args)
+
+
+def configure_kube_proxy(configure_prefix, api_servers, cluster_cidr):
+    kube_proxy_opts = {}
+    kube_proxy_opts['cluster-cidr'] = cluster_cidr
+    kube_proxy_opts['kubeconfig'] = kubeproxyconfig_path
+    kube_proxy_opts['logtostderr'] = 'true'
+    kube_proxy_opts['v'] = '0'
+    kube_proxy_opts['master'] = random.choice(api_servers)
+    kube_proxy_opts['hostname-override'] = get_node_name()
+
+    if b'lxc' in check_output('virt-what', shell=True):
+        kube_proxy_opts['conntrack-max-per-core'] = '0'
+
+    configure_kubernetes_service(configure_prefix, 'kube-proxy',
+                                 kube_proxy_opts, 'proxy-extra-args')
